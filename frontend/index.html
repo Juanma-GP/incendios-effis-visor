@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Incendios ES/PT</title>
+<meta name="viewport" content="initial-scale=1, width=device-width" />
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
+<script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  #map { position: absolute; top: 0; bottom: 0; width: 100%; }
+  #panel {
+    position: absolute; top: 10px; right: 10px; z-index: 1;
+    background: rgba(255,255,255,0.95); padding: 12px 14px; border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
+    font-size: 13px; color: #222; width: 200px;
+  }
+  #panel h3 { margin: 10px 0 6px; font-size: 14px; }
+  #panel h3:first-child { margin-top: 0; }
+  select { width: 100%; font-size: 13px; border-radius: 6px; border: 1px solid #ccc; }
+  #query-btn {
+    display: block; width: 100%; margin: 10px 0 4px; padding: 6px 10px;
+    border: none; border-radius: 6px; background: #2563eb; color: white;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #query-btn:disabled { background: #93c5fd; cursor: wait; }
+  #gradient-bar {
+    height: 10px; border-radius: 4px; margin: 4px 0 2px;
+    background: linear-gradient(to right, #2ecc71, #f1c40f, #963c1a, #e74c3c);
+  }
+  #gradient-labels { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h3>Países</h3>
+  <select id="countries-select" multiple size="4"></select>
+  <button id="query-btn">Consultar</button>
+  <h3>Años</h3>
+  <div id="gradient-bar"></div>
+  <div id="gradient-labels"><span id="gradient-min"></span><span id="gradient-max"></span></div>
+  <select id="years-select" multiple size="8"></select>
+</div>
+<script>
+const API_BASE = "http://localhost:8000";
+const COUNTRIES = [
+  { code: "ES", label: "España" },
+  { code: "PT", label: "Portugal" },
+  { code: "FR", label: "Francia" },
+  { code: "MA", label: "Marruecos" },
+];
+const DEFAULT_COUNTRIES = ["ES", "PT"];
+
+const MIN_OPACITY = 0.15;
+const MAX_OPACITY = 1.0;
+
+// Verde -> amarillo -> marrón -> rojo, repartidos uniformemente en el rango de años
+const COLOR_STOPS = [
+  { t: 0, rgb: [46, 204, 113] },
+  { t: 1 / 3, rgb: [241, 196, 15] },
+  { t: 2 / 3, rgb: [150, 60, 26] },
+  { t: 1, rgb: [231, 76, 60] },
+];
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function colorAtT(t) {
+  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
+    const a = COLOR_STOPS[i];
+    const b = COLOR_STOPS[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const localT = b.t === a.t ? 0 : (t - a.t) / (b.t - a.t);
+      return [0, 1, 2].map((i) => Math.round(lerp(a.rgb[i], b.rgb[i], localT)));
+    }
+  }
+  return COLOR_STOPS[COLOR_STOPS.length - 1].rgb;
+}
+
+function yearRange() {
+  if (!yearsAvailable.length) return [2010, 2026];
+  const minY = Math.min(...yearsAvailable);
+  const maxY = Math.max(...yearsAvailable);
+  return minY === maxY ? [minY, minY + 1] : [minY, maxY];
+}
+
+function colorForYear(year) {
+  const [minY, maxY] = yearRange();
+  const t = (year - minY) / (maxY - minY);
+  return `rgb(${colorAtT(t).join(",")})`;
+}
+
+function opacityForYear(year) {
+  const [minY, maxY] = yearRange();
+  const t = (year - minY) / (maxY - minY);
+  return lerp(MIN_OPACITY, MAX_OPACITY, t);
+}
+
+const CARTO_STYLE = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      ],
+      tileSize: 256,
+      attribution:
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    },
+  },
+  layers: [{ id: "carto-base", type: "raster", source: "carto" }],
+};
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: CARTO_STYLE,
+  center: [-6, 40], // entre España y Portugal
+  zoom: 5,
+});
+
+// Caché client-side: features ya descargadas por país (iso2), para no
+// volver a pedir a la API lo que ya tenemos si se añade un país nuevo.
+const countryCache = {};
+let yearsState = {};
+let yearsAvailable = [];
+
+function renderCountrySelect() {
+  const el = document.getElementById("countries-select");
+  el.innerHTML = "";
+  COUNTRIES.forEach(({ code, label }) => {
+    const opt = document.createElement("option");
+    opt.value = code;
+    opt.textContent = label;
+    opt.selected = DEFAULT_COUNTRIES.includes(code);
+    el.appendChild(opt);
+  });
+}
+
+function selectedCountries() {
+  return Array.from(document.getElementById("countries-select").selectedOptions).map((o) => o.value);
+}
+
+function renderYearSelect() {
+  const el = document.getElementById("years-select");
+  el.innerHTML = "";
+  yearsAvailable.forEach((year) => {
+    const opt = document.createElement("option");
+    opt.value = year;
+    opt.textContent = year;
+    opt.selected = true;
+    const [r, g, b] = colorForYear(year).match(/\d+/g);
+    opt.style.backgroundColor = `rgba(${r},${g},${b},${opacityForYear(year).toFixed(2)})`;
+    el.appendChild(opt);
+  });
+  el.onchange = () => {
+    const selected = new Set(Array.from(el.selectedOptions).map((o) => Number(o.value)));
+    yearsState = Object.fromEntries(yearsAvailable.map((y) => [y, selected.has(y)]));
+    applyYearFilter();
+  };
+}
+
+function applyYearFilter() {
+  const activeYears = yearsAvailable.filter((y) => yearsState[y]);
+  if (!map.getLayer("fires-fill")) return;
+  map.setFilter("fires-fill", ["in", ["get", "year"], ["literal", activeYears]]);
+  map.setFilter("fires-outline", ["in", ["get", "year"], ["literal", activeYears]]);
+}
+
+function updateGradientLabels() {
+  const [minY, maxY] = yearRange();
+  document.getElementById("gradient-min").textContent = minY;
+  document.getElementById("gradient-max").textContent = maxY;
+}
+
+function updateYearPaint() {
+  const [minY, maxY] = yearRange();
+  if (!map.getLayer("fires-fill")) return;
+  const colorExpr = ["interpolate", ["linear"], ["get", "year"]];
+  COLOR_STOPS.forEach(({ t, rgb }) => {
+    colorExpr.push(minY + t * (maxY - minY), `rgb(${rgb.join(",")})`);
+  });
+  map.setPaintProperty("fires-fill", "fill-color", colorExpr);
+  map.setPaintProperty("fires-fill", "fill-opacity", [
+    "interpolate", ["linear"], ["get", "year"],
+    minY, MIN_OPACITY,
+    maxY, MAX_OPACITY,
+  ]);
+}
+
+async function ensureCountryData(code) {
+  if (countryCache[code]) return;
+  const res = await fetch(`${API_BASE}/api/fires?iso2=${code}`);
+  const geojson = await res.json();
+  countryCache[code] = geojson.features;
+}
+
+function ensureFiresLayer() {
+  if (map.getLayer("fires-fill")) return;
+  map.addSource("fires", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer({
+    id: "fires-fill",
+    type: "fill",
+    source: "fires",
+    paint: { "fill-color": "#999999", "fill-opacity": MIN_OPACITY },
+  });
+  map.addLayer({
+    id: "fires-outline",
+    type: "line",
+    source: "fires",
+    paint: { "line-color": "#333333", "line-width": 0.5 },
+  });
+
+  map.on("click", "fires-fill", (e) => {
+    const p = e.features[0].properties;
+    new maplibregl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(
+        `<b>${p.country}</b> (${p.admlvl2 || ""}, ${p.admlvl3 || ""})<br/>
+         Año: ${p.year}<br/>
+         Área: ${p.area_ha} ha<br/>
+         Inicio: ${p.initialdate}`
+      )
+      .addTo(map);
+  });
+  map.on("mouseenter", "fires-fill", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "fires-fill", () => (map.getCanvas().style.cursor = ""));
+}
+
+async function runQuery() {
+  const btn = document.getElementById("query-btn");
+  btn.disabled = true;
+  btn.textContent = "Consultando...";
+  try {
+    const selected = selectedCountries();
+    const missing = selected.filter((code) => !countryCache[code]);
+    await Promise.all(missing.map(ensureCountryData));
+
+    const combinedFeatures = selected.flatMap((code) => countryCache[code] || []);
+    yearsAvailable = [...new Set(combinedFeatures.map((f) => f.properties.year))].sort((a, b) => a - b);
+    yearsState = Object.fromEntries(yearsAvailable.map((y) => [y, true]));
+    renderYearSelect();
+    updateGradientLabels();
+
+    ensureFiresLayer();
+    map.getSource("fires").setData({ type: "FeatureCollection", features: combinedFeatures });
+    updateYearPaint();
+    applyYearFilter();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Consultar";
+  }
+}
+
+renderCountrySelect();
+document.getElementById("query-btn").addEventListener("click", runQuery);
+</script>
+</body>
+</html>

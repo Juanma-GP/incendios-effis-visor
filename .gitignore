@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Ficheros de datos originales (pesados, descargables de nuevo desde EFFIS)
+*.json
+*.zip
