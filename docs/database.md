@@ -98,10 +98,18 @@ encarga. Ver
 [`supabase/update_2026-07-18_simplify_geom.sql`](../supabase/update_2026-07-18_simplify_geom.sql)
 para el backfill de las filas ya cargadas antes de este cambio.
 
-Si con esto siguiera dando timeout, la siguiente palanca (no aplicada aún)
-sería subir `statement_timeout` para el rol `anon` en Supabase — pero
-conviene agotar antes las optimizaciones de consulta, ya que un timeout más
-alto solo tapa el síntoma si la consulta de verdad es tan cara.
+Como aun así ES+PT combinados rozaban el límite, se subió también el
+`statement_timeout` del rol `anon` a 20s (por defecto ronda los 8s) — ver
+[`supabase/update_2026-07-18c_statement_timeout.sql`](../supabase/update_2026-07-18c_statement_timeout.sql).
+Esto es un ajuste moderado, no una solución mágica: si una consulta de
+verdad tardara más que eso, el problema seguiría siendo de fondo.
+
+Aparte del rendimiento, hay un problema distinto de **latencia esporádica**:
+el tier gratuito de Supabase hace un "cold start" tras un rato de
+inactividad, y la primera petición después de eso puede tardar de más y dar
+timeout aunque la consulta en sí sea rápida. Esto se mitiga en el frontend
+con reintentos automáticos (`rpcWithRetry`, ver [frontend.md](frontend.md)),
+no con más ajustes en la base de datos.
 
 ## Carga de datos nuevos (canal oficial: Supabase)
 
@@ -162,5 +170,12 @@ superficie ha ardido en total en este mismo sitio a lo largo del tiempo?".
   operación pesada sobre toda la tabla, no algo para disparar por trigger en
   cada insert. Ver
   [`supabase/update_2026-07-18_fire_zones.sql`](../supabase/update_2026-07-18_fire_zones.sql).
-- Pendiente (no implementado aún): función RPC equivalente a `get_fires`
-  para consultar `fire_zones` desde el frontend, y visualizarlo en el mapa.
+- Columnas resumen precalculadas (`num_fires`, `total_area_ha`,
+  `first_year`, `last_year`) — igual que con `geom_simplified`, se calculan
+  una vez en `rebuild_fire_zones()` en vez de parsear el jsonb `history` en
+  cada consulta. Ver
+  [`supabase/update_2026-07-18b_fire_zones_rpc.sql`](../supabase/update_2026-07-18b_fire_zones_rpc.sql).
+- Función RPC `get_fire_zones(country_codes text[])`: devuelve GeoJSON con
+  esas columnas resumen (no el `history` completo, para no engordar la
+  respuesta). Consumida desde el frontend en la capa "Zonas de
+  reincidencia" — ver [frontend.md](frontend.md).

@@ -83,7 +83,7 @@ clave `"iso2:año"` (ej. `"ES:2023"`). Al pulsar "Consultar":
 1. Para cada país seleccionado, se calculan los años seleccionados que
    **no** están ya en caché para ese país.
 2. Solo esas combinaciones país+años que faltan se piden con
-   `supabase.rpc("get_fires", { country_codes: [code], filter_years: [...] })`
+   `rpcWithRetry("get_fires", { country_codes: [code], filter_years: [...] })`
    (una llamada por país, con todos sus años pendientes de golpe).
 3. El resultado se reparte en `dataCache` por año (usando la propiedad
    `year` de cada feature) y se combina en cliente con lo que ya había en
@@ -136,3 +136,24 @@ tapar el mapa, y sube a 0.95 al pasar el ratón por encima (`transition` de
 cd frontend && python3 -m http.server 8080
 # abrir http://localhost:8080
 ```
+
+## Despliegue en GitHub Pages (2026-07-18)
+
+- Repo público: https://github.com/Juanma-GP/incendios-effis-visor
+- Visor en vivo: https://juanma-gp.github.io/incendios-effis-visor/
+- Workflow [`.github/workflows/pages.yml`](../.github/workflows/pages.yml):
+  se dispara con cada push a `master` que toque `frontend/**` (o a mano con
+  `workflow_dispatch`), y publica el contenido de `frontend/` con
+  `actions/upload-pages-artifact` + `actions/deploy-pages` — no la carpeta
+  `docs/` de la raíz, que ya se usa para la documentación del proyecto, no
+  para el sitio.
+- Pages está configurado con `build_type: workflow` (no "Deploy from a
+  branch"), activado vía `gh api -X POST repos/.../pages -f
+  build_type=workflow` — necesario para que `actions/configure-pages`
+  encuentre el sitio; si Pages no está así configurado antes del primer
+  push, ese primer run falla con `Get Pages site failed... Not Found` (ya
+  nos pasó una vez, se arregló activando Pages y relanzando el workflow a
+  mano con `gh workflow run pages.yml`).
+- Como el frontend llama directamente a Supabase (sin backend propio), no
+  hace falta ninguna variable de entorno ni secreto en el workflow — es
+  puramente estático.

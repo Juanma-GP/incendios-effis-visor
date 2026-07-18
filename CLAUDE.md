@@ -43,9 +43,16 @@ acumulación de superficie arrasada a lo largo del tiempo.
    coloreada por nº de reincidencias~~ ✅ — ver
    [docs/database.md](docs/database.md) y
    [docs/frontend.md](docs/frontend.md).
-9. **Pendiente:** crear el repo remoto en GitHub, hacer push, y desplegar
-   el frontend (ya 100% estático) en GitHub Pages.
-10. (Futuro, no decidido aún) posibles mejoras: agregados por
+9. ~~Crear el repo remoto en GitHub, hacer push, y desplegar el frontend
+   (ya 100% estático) en GitHub Pages~~ ✅ — repo público
+   [Juanma-GP/incendios-effis-visor](https://github.com/Juanma-GP/incendios-effis-visor),
+   visor en https://juanma-gp.github.io/incendios-effis-visor/, workflow
+   [`.github/workflows/pages.yml`](.github/workflows/pages.yml). Ver
+   [docs/frontend.md](docs/frontend.md#despliegue-en-github-pages-2026-07-18).
+10. ~~Subir `statement_timeout` en Supabase y añadir reintentos en el
+    frontend para el cold start del tier gratuito~~ ✅ — ver
+    [docs/database.md](docs/database.md) y [docs/frontend.md](docs/frontend.md).
+11. (Futuro, no decidido aún) posibles mejoras: agregados por
     comunidad/provincia, estadísticas de superficie quemada por año/región.
 
 ## Convenciones de trabajo con el usuario

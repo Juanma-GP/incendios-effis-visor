@@ -15,9 +15,8 @@ apuntar contra la Pi.
   `id`, `year` (extraído de `initialdate`), `iso2`, `country`, `admlvl1/2/3`,
   `area_ha`, `initialdate`, `finaldate`. Ambos parámetros son opcionales.
 - `GET /api/years?iso2=ES,PT` — lista de años distintos disponibles para los
-  países dados. **Nota:** el frontend actual ya no usa este endpoint (deriva
-  los años de las features que descarga de `/api/fires`, ver
-  [frontend.md](frontend.md)), pero se mantiene por si resulta útil.
+  países dados. Equivalente a la función RPC `get_years` de Supabase (ver
+  [database.md](database.md)), que es la que usa el frontend actual.
 
 ## Configuración
 
