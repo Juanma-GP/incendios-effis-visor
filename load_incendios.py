@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
-"""Carga el GeoJSON de EFFIS (SRID 3035) en la tabla incendios (SRID 4326)."""
+"""Carga el GeoJSON de EFFIS (SRID 3035) en la tabla incendios (SRID 4326).
+
+El nombre del fichero no importa: se acepta cualquier GeoJSON cuya forma
+coincida con una exportación EFFIS (FeatureCollection en EPSG:3035 con las
+propiedades esperadas), independientemente de cómo se llame el archivo.
+"""
 import argparse
 import json
+import sys
 from datetime import datetime
 
 import psycopg2
@@ -15,6 +21,26 @@ PROPERTY_COLUMNS = [
     "other_natural_percent", "agriculture_percent", "artificial_percent",
     "other_percent", "natura2k_percent",
 ]
+
+# Propiedades mínimas para considerar que un feature "tiene forma de EFFIS".
+REQUIRED_PROPERTY_KEYS = {"id", "initialdate", "finaldate", "iso2", "country"}
+
+
+def looks_like_effis_geojson(data):
+    if not isinstance(data, dict) or data.get("type") != "FeatureCollection":
+        return False
+    crs_name = data.get("crs", {}).get("properties", {}).get("name", "")
+    if "3035" not in crs_name:
+        return False
+    features = data.get("features")
+    if not features:
+        return False
+    first_props = features[0].get("properties", {})
+    if not REQUIRED_PROPERTY_KEYS.issubset(first_props.keys()):
+        return False
+    if features[0].get("geometry", {}).get("type") != "MultiPolygon":
+        return False
+    return True
 
 INSERT_SQL = f"""
     INSERT INTO incendios ({", ".join(PROPERTY_COLUMNS)}, geom)
@@ -72,6 +98,12 @@ def main():
 
     with open(args.json_path, encoding="utf-8") as f:
         data = json.load(f)
+
+    if not looks_like_effis_geojson(data):
+        print(f"'{args.json_path}' no tiene forma de exportación EFFIS (GeoJSON EPSG:3035 con las "
+              f"propiedades esperadas). Se omite.", file=sys.stderr)
+        sys.exit(1)
+
     features = data["features"]
     print(f"Features encontradas: {len(features)}")
 

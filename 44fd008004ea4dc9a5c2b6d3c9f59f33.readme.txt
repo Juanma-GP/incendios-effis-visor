@@ -1,11 +1,11 @@
 Data source: EFFIS/WILDFIRE Database
 Copyright: © European Union, 1995-2026
            https://ec.europa.eu/info/legal-notice_en
-File creation date-time: 2026-07-15T14:27:50.663374+02:00
+File creation date-time: 2026-07-18T10:01:30.030251+02:00
 Data contained: fire
 Data format: GeoJSON
-Date start: 2010-05-01
-Date end: 2022-05-01
+Date start: 2026-07-15
+Date end: 2026-07-18
 Selected admin entities:
 
 - ES

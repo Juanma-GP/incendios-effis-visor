@@ -1,8 +1,12 @@
-# Backend
+# Backend (legacy, ya no lo usa el frontend)
 
 API ligera en FastAPI (`backend/main.py`, deps en `backend/requirements.txt`,
-instaladas en el venv raíz `.venv/`), pensada como capa entre la tabla
-`incendios` (ver [database.md](database.md)) y el frontend.
+instaladas en el venv raíz `.venv/`). Se usó como capa entre la tabla
+`incendios` y el frontend antes de migrar a Supabase. Desde que el
+[frontend](frontend.md) llama directamente a la función RPC `get_fires` de
+Supabase vía `supabase-js`, este backend ya no hace falta para que el visor
+funcione — se conserva por si resulta útil como referencia o para volver a
+apuntar contra la Pi.
 
 ## Endpoints
 
@@ -25,8 +29,3 @@ Variables de entorno para la conexión a Postgres: `PGHOST` (default
 PGHOST=<IP_PI> PGPASSWORD=<pass> ./.venv/bin/uvicorn backend.main:app --reload --port 8000
 ```
 
-## Plan futuro
-
-Si se migra a Supabase (ver [database.md](database.md)), este backend
-dejaría de ser necesario: PostgREST + una función SQL en Supabase cubrirían
-el mismo rol, permitiendo que el frontend sea 100% estático (GitHub Pages).

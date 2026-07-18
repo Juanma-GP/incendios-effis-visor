@@ -6,15 +6,18 @@
 <meta name="viewport" content="initial-scale=1, width=device-width" />
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.css" />
 <script src="https://unpkg.com/maplibre-gl@4/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
   #map { position: absolute; top: 0; bottom: 0; width: 100%; }
   #panel {
     position: absolute; top: 10px; right: 10px; z-index: 1;
-    background: rgba(255,255,255,0.95); padding: 12px 14px; border-radius: 8px;
+    background: rgba(255,255,255,0.04); padding: 12px 14px; border-radius: 8px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
     font-size: 13px; color: #222; width: 200px;
+    transition: background-color 0.15s ease;
   }
+  #panel:hover { background: rgba(255,255,255,0.95); }
   #panel h3 { margin: 10px 0 6px; font-size: 14px; }
   #panel h3:first-child { margin-top: 0; }
   select { width: 100%; font-size: 13px; border-radius: 6px; border: 1px solid #ccc; }
@@ -24,11 +27,23 @@
     font-size: 13px; font-weight: 600; cursor: pointer;
   }
   #query-btn:disabled { background: #93c5fd; cursor: wait; }
-  #gradient-bar {
-    height: 10px; border-radius: 4px; margin: 4px 0 2px;
-    background: linear-gradient(to right, #2ecc71, #f1c40f, #963c1a, #e74c3c);
+
+  #year-range { position: relative; height: 24px; margin: 10px 0 4px; touch-action: none; }
+  #year-range-track {
+    position: absolute; top: 10px; left: 7px; right: 7px; height: 4px; border-radius: 2px; background: #ddd;
   }
-  #gradient-labels { display: flex; justify-content: space-between; font-size: 11px; color: #555; margin-bottom: 6px; }
+  #year-range-fill {
+    position: absolute; top: 10px; height: 4px; border-radius: 2px; background: #2563eb;
+  }
+  .year-handle {
+    position: absolute; top: 4px; width: 14px; height: 14px; margin-left: -7px;
+    border-radius: 50%; background: #2563eb; border: 2px solid white;
+    box-shadow: 0 0 2px rgba(0,0,0,0.5); cursor: grab; touch-action: none;
+  }
+  .year-handle:active { cursor: grabbing; }
+  #year-range-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #222; }
+
+  #zones-toggle-label { display: flex; align-items: center; gap: 6px; margin-top: 12px; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -37,13 +52,28 @@
   <h3>Países</h3>
   <select id="countries-select" multiple size="4"></select>
   <button id="query-btn">Consultar</button>
-  <h3>Años</h3>
-  <div id="gradient-bar"></div>
-  <div id="gradient-labels"><span id="gradient-min"></span><span id="gradient-max"></span></div>
-  <select id="years-select" multiple size="8"></select>
+  <label id="zones-toggle-label">
+    <input type="checkbox" id="zones-toggle" />
+    Zonas de reincidencia
+  </label>
+  <div id="years-section">
+    <h3>Años</h3>
+    <div id="year-range-labels"><span id="year-from-label"></span><span id="year-to-label"></span></div>
+    <div id="year-range">
+      <div id="year-range-track"></div>
+      <div id="year-range-fill"></div>
+      <div class="year-handle" id="year-handle-from" tabindex="0"></div>
+      <div class="year-handle" id="year-handle-to" tabindex="0"></div>
+    </div>
+  </div>
 </div>
 <script>
-const API_BASE = "http://localhost:8000";
+// Datos públicos de solo lectura (RLS activado en Supabase, política de
+// SELECT para el rol anon) — es seguro tener esta clave embebida aquí.
+const SUPABASE_URL = "https://qohghmezubkfckukbacz.supabase.co";
+const SUPABASE_KEY = "sb_publishable_Ooz9MTqPjHvJdPzJwX9_Jw_wpA2-FSQ";
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 const COUNTRIES = [
   { code: "ES", label: "España" },
   { code: "PT", label: "Portugal" },
@@ -55,47 +85,44 @@ const DEFAULT_COUNTRIES = ["ES", "PT"];
 const MIN_OPACITY = 0.15;
 const MAX_OPACITY = 1.0;
 
-// Verde -> amarillo -> marrón -> rojo, repartidos uniformemente en el rango de años
-const COLOR_STOPS = [
-  { t: 0, rgb: [46, 204, 113] },
-  { t: 1 / 3, rgb: [241, 196, 15] },
-  { t: 2 / 3, rgb: [150, 60, 26] },
-  { t: 1, rgb: [231, 76, 60] },
+// Colores por rango de recencia dentro de los años SELECCIONADOS (no del
+// histórico completo): el año más reciente siempre es rojo, y al añadir más
+// años se va extendiendo hacia atrás, marrón -> amarillo -> verde.
+const RANK_COLORS = [
+  [231, 76, 60],  // rojo   - más reciente
+  [150, 60, 26],  // marrón
+  [241, 196, 15], // amarillo
+  [46, 204, 113], // verde  - más antiguo (de los 4 primeros)
 ];
 
 function lerp(a, b, t) {
   return a + (b - a) * t;
 }
 
-function colorAtT(t) {
-  for (let i = 0; i < COLOR_STOPS.length - 1; i++) {
-    const a = COLOR_STOPS[i];
-    const b = COLOR_STOPS[i + 1];
-    if (t >= a.t && t <= b.t) {
-      const localT = b.t === a.t ? 0 : (t - a.t) / (b.t - a.t);
-      return [0, 1, 2].map((i) => Math.round(lerp(a.rgb[i], b.rgb[i], localT)));
-    }
-  }
-  return COLOR_STOPS[COLOR_STOPS.length - 1].rgb;
+// Para más de 4 años seleccionados, se interpola de forma continua entre
+// rojo (más reciente) y verde (más antiguo) en vez de usar solo 4 colores.
+function colorAtRankFraction(t) {
+  const scaled = t * (RANK_COLORS.length - 1);
+  const i = Math.min(Math.floor(scaled), RANK_COLORS.length - 2);
+  const localT = scaled - i;
+  const a = RANK_COLORS[i];
+  const b = RANK_COLORS[i + 1];
+  return [0, 1, 2].map((c) => Math.round(lerp(a[c], b[c], localT)));
 }
 
-function yearRange() {
-  if (!yearsAvailable.length) return [2010, 2026];
-  const minY = Math.min(...yearsAvailable);
-  const maxY = Math.max(...yearsAvailable);
-  return minY === maxY ? [minY, minY + 1] : [minY, maxY];
-}
-
-function colorForYear(year) {
-  const [minY, maxY] = yearRange();
-  const t = (year - minY) / (maxY - minY);
-  return `rgb(${colorAtT(t).join(",")})`;
-}
-
-function opacityForYear(year) {
-  const [minY, maxY] = yearRange();
-  const t = (year - minY) / (maxY - minY);
-  return lerp(MIN_OPACITY, MAX_OPACITY, t);
+// Devuelve { year: {color, opacity} } para los años dados (se asume
+// selectedYears(), ascendente), ancorado en rojo = año más reciente.
+function colorsByRecency(years) {
+  const sorted = [...years].sort((a, b) => b - a); // descendente: rank 0 = más reciente
+  const n = sorted.length;
+  const result = {};
+  sorted.forEach((year, rank) => {
+    const t = n === 1 ? 0 : rank / (n - 1); // 0 = más reciente, 1 = más antiguo
+    const color = n <= RANK_COLORS.length ? RANK_COLORS[rank] : colorAtRankFraction(t);
+    const opacity = lerp(MAX_OPACITY, MIN_OPACITY, t);
+    result[year] = { color, opacity };
+  });
+  return result;
 }
 
 const CARTO_STYLE = {
@@ -124,11 +151,14 @@ const map = new maplibregl.Map({
   zoom: 5,
 });
 
-// Caché client-side: features ya descargadas por país (iso2), para no
-// volver a pedir a la API lo que ya tenemos si se añade un país nuevo.
-const countryCache = {};
-let yearsState = {};
+// Caché client-side: features ya descargadas, indexadas por "iso2:año",
+// para no volver a pedir a Supabase lo que ya tenemos.
+const dataCache = {};
 let yearsAvailable = [];
+
+// Caché de zonas de reincidencia, indexada por país (no depende del año,
+// una zona agrupa incendios de todos los años).
+const zonesCache = {};
 
 function renderCountrySelect() {
   const el = document.getElementById("countries-select");
@@ -146,58 +176,207 @@ function selectedCountries() {
   return Array.from(document.getElementById("countries-select").selectedOptions).map((o) => o.value);
 }
 
-function renderYearSelect() {
-  const el = document.getElementById("years-select");
-  el.innerHTML = "";
-  yearsAvailable.forEach((year) => {
-    const opt = document.createElement("option");
-    opt.value = year;
-    opt.textContent = year;
-    opt.selected = true;
-    const [r, g, b] = colorForYear(year).match(/\d+/g);
-    opt.style.backgroundColor = `rgba(${r},${g},${b},${opacityForYear(year).toFixed(2)})`;
-    el.appendChild(opt);
-  });
-  el.onchange = () => {
-    const selected = new Set(Array.from(el.selectedOptions).map((o) => Number(o.value)));
-    yearsState = Object.fromEntries(yearsAvailable.map((y) => [y, selected.has(y)]));
-    applyYearFilter();
+// Slider de rango con dos manecillas propias (sin usar dos <input
+// type="range"> superpuestos: cuando ambas manecillas caen en el mismo
+// valor, ese truco hace que arrastrar una mueva las dos a la vez).
+let yearMin = 0;
+let yearMax = 0;
+let yearFrom = 0;
+let yearTo = 0;
+let draggingHandle = null; // "from" | "to" | null
+
+function selectedYears() {
+  const years = [];
+  for (let y = yearFrom; y <= yearTo; y++) years.push(y);
+  return years;
+}
+
+// Consulta ligera (sin geometría) para saber qué años hay disponibles, sin
+// tener que descargar antes todas las geometrías. Por defecto, si no había
+// selección previa, se preselecciona solo el último año (rango de un
+// único año: desde = hasta = último).
+async function refreshYearsSelect() {
+  const countries = selectedCountries();
+  const { data, error } = await supabaseClient.rpc("get_years", { country_codes: countries });
+  if (error) throw error;
+  yearsAvailable = data || [];
+  yearMin = yearsAvailable.length ? Math.min(...yearsAvailable) : 0;
+  yearMax = yearsAvailable.length ? Math.max(...yearsAvailable) : 0;
+  yearFrom = yearMax;
+  yearTo = yearMax;
+  renderYearHandles();
+}
+
+function valueToPct(v) {
+  return yearMax === yearMin ? 0 : (v - yearMin) / (yearMax - yearMin);
+}
+
+function pixelToValue(clientX) {
+  const rect = document.getElementById("year-range").getBoundingClientRect();
+  const usable = rect.width - 14; // ancho útil descontando el diámetro de la manecilla
+  const pct = usable <= 0 ? 0 : Math.min(Math.max((clientX - rect.left - 7) / usable, 0), 1);
+  return Math.round(yearMin + pct * (yearMax - yearMin));
+}
+
+function renderYearHandles() {
+  const container = document.getElementById("year-range");
+  const usable = container.clientWidth - 14;
+  const xFor = (v) => 7 + valueToPct(v) * usable;
+
+  const fromX = xFor(yearFrom);
+  const toX = xFor(yearTo);
+  document.getElementById("year-handle-from").style.left = `${fromX}px`;
+  document.getElementById("year-handle-to").style.left = `${toX}px`;
+
+  const fill = document.getElementById("year-range-fill");
+  fill.style.left = `${fromX}px`;
+  fill.style.width = `${Math.max(toX - fromX, 0)}px`;
+
+  document.getElementById("year-from-label").textContent = yearFrom;
+  document.getElementById("year-to-label").textContent = yearTo;
+}
+
+function moveDraggingHandleTo(value) {
+  if (draggingHandle === "from") {
+    yearFrom = Math.min(value, yearTo);
+  } else if (draggingHandle === "to") {
+    yearTo = Math.max(value, yearFrom);
+  }
+  renderYearHandles();
+}
+
+function setupYearRangeEvents() {
+  const container = document.getElementById("year-range");
+  const fromHandle = document.getElementById("year-handle-from");
+  const toHandle = document.getElementById("year-handle-to");
+
+  const startDrag = (which) => (e) => {
+    e.stopPropagation();
+    draggingHandle = which;
   };
-}
+  fromHandle.addEventListener("pointerdown", startDrag("from"));
+  toHandle.addEventListener("pointerdown", startDrag("to"));
 
-function applyYearFilter() {
-  const activeYears = yearsAvailable.filter((y) => yearsState[y]);
-  if (!map.getLayer("fires-fill")) return;
-  map.setFilter("fires-fill", ["in", ["get", "year"], ["literal", activeYears]]);
-  map.setFilter("fires-outline", ["in", ["get", "year"], ["literal", activeYears]]);
-}
-
-function updateGradientLabels() {
-  const [minY, maxY] = yearRange();
-  document.getElementById("gradient-min").textContent = minY;
-  document.getElementById("gradient-max").textContent = maxY;
-}
-
-function updateYearPaint() {
-  const [minY, maxY] = yearRange();
-  if (!map.getLayer("fires-fill")) return;
-  const colorExpr = ["interpolate", ["linear"], ["get", "year"]];
-  COLOR_STOPS.forEach(({ t, rgb }) => {
-    colorExpr.push(minY + t * (maxY - minY), `rgb(${rgb.join(",")})`);
+  // Click en el carril (fuera de las manecillas): mueve la manecilla más cercana.
+  container.addEventListener("pointerdown", (e) => {
+    if (e.target.classList.contains("year-handle")) return;
+    const value = pixelToValue(e.clientX);
+    draggingHandle = Math.abs(value - yearFrom) <= Math.abs(value - yearTo) ? "from" : "to";
+    moveDraggingHandleTo(value);
   });
-  map.setPaintProperty("fires-fill", "fill-color", colorExpr);
-  map.setPaintProperty("fires-fill", "fill-opacity", [
-    "interpolate", ["linear"], ["get", "year"],
-    minY, MIN_OPACITY,
-    maxY, MAX_OPACITY,
-  ]);
+
+  window.addEventListener("pointermove", (e) => {
+    if (!draggingHandle) return;
+    moveDraggingHandleTo(pixelToValue(e.clientX));
+  });
+  window.addEventListener("pointerup", () => {
+    draggingHandle = null;
+  });
+
+  // Accesibilidad básica: flechas izquierda/derecha con foco en una manecilla.
+  const onKeydown = (which) => (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const delta = e.key === "ArrowLeft" ? -1 : 1;
+    draggingHandle = which;
+    moveDraggingHandleTo((which === "from" ? yearFrom : yearTo) + delta);
+    draggingHandle = null;
+  };
+  fromHandle.addEventListener("keydown", onKeydown("from"));
+  toHandle.addEventListener("keydown", onKeydown("to"));
 }
 
-async function ensureCountryData(code) {
-  if (countryCache[code]) return;
-  const res = await fetch(`${API_BASE}/api/fires?iso2=${code}`);
-  const geojson = await res.json();
-  countryCache[code] = geojson.features;
+function updateYearPaint(years) {
+  if (!map.getLayer("fires-fill")) return;
+  const colors = colorsByRecency(years);
+
+  const colorExpr = ["match", ["get", "year"]];
+  const opacityExpr = ["match", ["get", "year"]];
+  years.forEach((year) => {
+    const { color, opacity } = colors[year];
+    colorExpr.push(year, `rgb(${color.join(",")})`);
+    opacityExpr.push(year, opacity);
+  });
+  colorExpr.push("#999999");
+  opacityExpr.push(MIN_OPACITY);
+
+  map.setPaintProperty("fires-fill", "fill-color", colorExpr);
+  map.setPaintProperty("fires-fill", "fill-opacity", opacityExpr);
+}
+
+// Descarga las geometrías que falten para un país, solo de los años pedidos
+// que aún no estén en caché, y las reparte en dataCache por "iso2:año".
+async function ensureCountryYearsData(code, years) {
+  const missingYears = years.filter((y) => !dataCache[`${code}:${y}`]);
+  if (missingYears.length === 0) return;
+
+  const { data, error } = await supabaseClient.rpc("get_fires", {
+    country_codes: [code],
+    filter_years: missingYears,
+  });
+  if (error) throw error;
+
+  missingYears.forEach((y) => (dataCache[`${code}:${y}`] = []));
+  data.features.forEach((feature) => {
+    const key = `${code}:${feature.properties.year}`;
+    (dataCache[key] || (dataCache[key] = [])).push(feature);
+  });
+}
+
+async function ensureZonesData(code) {
+  if (zonesCache[code]) return;
+  const { data, error } = await supabaseClient.rpc("get_fire_zones", { country_codes: [code] });
+  if (error) throw error;
+  zonesCache[code] = data.features;
+}
+
+function ensureZonesLayer() {
+  if (map.getLayer("zones-fill")) return;
+  // Se insertan debajo de "fires-fill" para no tapar el color por año de
+  // los incendios individuales.
+  const beforeId = map.getLayer("fires-fill") ? "fires-fill" : undefined;
+  map.addSource("zones", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer(
+    { id: "zones-fill", type: "fill", source: "zones", paint: { "fill-color": "#6d28d9", "fill-opacity": 0.55 } },
+    beforeId
+  );
+  map.addLayer(
+    { id: "zones-outline", type: "line", source: "zones", paint: { "line-color": "#4c1d95", "line-width": 1 } },
+    beforeId
+  );
+
+  map.on("click", "zones-fill", (e) => {
+    const p = e.features[0].properties;
+    new maplibregl.Popup()
+      .setLngLat(e.lngLat)
+      .setHTML(
+        `<b>Zona de reincidencia</b><br/>
+         Incendios: ${p.num_fires}<br/>
+         Área acumulada: ${p.total_area_ha} ha<br/>
+         ${p.first_year} - ${p.last_year}`
+      )
+      .addTo(map);
+  });
+  map.on("mouseenter", "zones-fill", () => (map.getCanvas().style.cursor = "pointer"));
+  map.on("mouseleave", "zones-fill", () => (map.getCanvas().style.cursor = ""));
+}
+
+// Colorea por nº de reincidencias (más incendios en la misma zona = más
+// oscuro), escala relativa al mínimo/máximo de lo cargado en este momento.
+// Escala de tramos fija (no depende del min/max de cada consulta): la
+// mayoría de zonas tienen 1 solo incendio (sin reincidencia) y muy pocas
+// tienen muchos, así que una escala continua min-max deja casi todo en el
+// mismo color claro. Con tramos fijos, cada nº de reincidencias se ve.
+function updateZonesPaint() {
+  if (!map.getLayer("zones-fill")) return;
+  map.setPaintProperty("zones-fill", "fill-color", [
+    "step", ["get", "num_fires"],
+    "#f3e8ff", // 1 incendio, sin reincidencia
+    2, "#c4b5fd",
+    3, "#a78bfa",
+    4, "#7c3aed",
+    5, "#4c1d95", // 5 o más
+  ]);
 }
 
 function ensureFiresLayer() {
@@ -237,28 +416,68 @@ async function runQuery() {
   btn.disabled = true;
   btn.textContent = "Consultando...";
   try {
-    const selected = selectedCountries();
-    const missing = selected.filter((code) => !countryCache[code]);
-    await Promise.all(missing.map(ensureCountryData));
+    const countries = selectedCountries();
+    const showZones = document.getElementById("zones-toggle").checked;
 
-    const combinedFeatures = selected.flatMap((code) => countryCache[code] || []);
-    yearsAvailable = [...new Set(combinedFeatures.map((f) => f.properties.year))].sort((a, b) => a - b);
-    yearsState = Object.fromEntries(yearsAvailable.map((y) => [y, true]));
-    renderYearSelect();
-    updateGradientLabels();
+    if (showZones) {
+      await Promise.all(countries.map(ensureZonesData));
+      const zonesFeatures = countries.flatMap((code) => zonesCache[code] || []);
+      ensureZonesLayer();
+      map.getSource("zones").setData({ type: "FeatureCollection", features: zonesFeatures });
+      updateZonesPaint();
+      map.setLayoutProperty("zones-fill", "visibility", "visible");
+      map.setLayoutProperty("zones-outline", "visibility", "visible");
+      if (map.getLayer("fires-fill")) {
+        map.setLayoutProperty("fires-fill", "visibility", "none");
+        map.setLayoutProperty("fires-outline", "visibility", "none");
+      }
+    } else {
+      const years = selectedYears();
+      await Promise.all(countries.map((code) => ensureCountryYearsData(code, years)));
+      const combinedFeatures = countries.flatMap((code) =>
+        years.flatMap((year) => dataCache[`${code}:${year}`] || [])
+      );
 
-    ensureFiresLayer();
-    map.getSource("fires").setData({ type: "FeatureCollection", features: combinedFeatures });
-    updateYearPaint();
-    applyYearFilter();
+      ensureFiresLayer();
+      map.setLayoutProperty("fires-fill", "visibility", "visible");
+      map.setLayoutProperty("fires-outline", "visibility", "visible");
+      map.getSource("fires").setData({ type: "FeatureCollection", features: combinedFeatures });
+      updateYearPaint(years);
+
+      if (map.getLayer("zones-fill")) {
+        map.setLayoutProperty("zones-fill", "visibility", "none");
+        map.setLayoutProperty("zones-outline", "visibility", "none");
+      }
+    }
+  } catch (err) {
+    console.error(err);
+    alert(`Error consultando Supabase: ${err.message || err}`);
   } finally {
     btn.disabled = false;
     btn.textContent = "Consultar";
   }
 }
 
+function updateZonesToggleUI() {
+  const showZones = document.getElementById("zones-toggle").checked;
+  document.getElementById("years-section").style.display = showZones ? "none" : "block";
+}
+
 renderCountrySelect();
+document.getElementById("zones-toggle").addEventListener("change", updateZonesToggleUI);
+updateZonesToggleUI();
+document.getElementById("countries-select").addEventListener("change", () => {
+  refreshYearsSelect().catch((err) => {
+    console.error(err);
+    alert(`Error consultando años disponibles: ${err.message || err}`);
+  });
+});
 document.getElementById("query-btn").addEventListener("click", runQuery);
+setupYearRangeEvents();
+refreshYearsSelect().catch((err) => {
+  console.error(err);
+  alert(`Error consultando años disponibles: ${err.message || err}`);
+});
 </script>
 </body>
 </html>

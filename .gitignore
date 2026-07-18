@@ -1,7 +1,13 @@
 .venv/
 __pycache__/
 *.pyc
+.DS_Store
 
 # Ficheros de datos originales (pesados, descargables de nuevo desde EFFIS)
 *.json
 *.zip
+
+# Credenciales
+.ñ.txt
+*.env
+.env.*

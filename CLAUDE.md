@@ -11,9 +11,8 @@ acumulación de superficie arrasada a lo largo del tiempo.
 
 - [docs/data.md](docs/data.md) — origen, ficheros, esquema de propiedades y
   limitaciones conocidas del dataset EFFIS.
-- [docs/database.md](docs/database.md) — Postgres+PostGIS en la Raspberry
-  Pi, esquema de la tabla, índices, script de carga, plan de migración a
-  Supabase.
+- [docs/database.md](docs/database.md) — Supabase (base de datos activa),
+  esquema, índices, carga de datos nuevos, e histórico de la Raspberry Pi.
 - [docs/backend.md](docs/backend.md) — API FastAPI (endpoints, config).
 - [docs/frontend.md](docs/frontend.md) — mapa MapLibre, controles, lógica de
   color por año, caché client-side por país.
@@ -25,13 +24,29 @@ acumulación de superficie arrasada a lo largo del tiempo.
 3. ~~Backend FastAPI sirviendo GeoJSON filtrado por país/año~~ ✅
 4. ~~Frontend MapLibre con gradiente de color por año, filtros de país/año,
    caché client-side~~ ✅
-5. **En evaluación:** desplegar el frontend en GitHub Pages (estático) y
-   migrar los datos a Supabase, sustituyendo el backend FastAPI por
-   PostgREST + una función SQL que devuelva GeoJSON directamente al
-   frontend. Ver detalles y trade-offs en
-   [docs/database.md](docs/database.md#plan-futuro-migración-a-supabase).
-6. (Futuro, no decidido aún) posibles mejoras: agregados por
-   comunidad/provincia, estadísticas de superficie quemada por año/región.
+5. ~~Migrar los datos a Supabase (esquema, RLS, función RPC `get_fires`) y
+   convertirlo en el canal oficial de nuevas cargas~~ ✅ — ver
+   [docs/database.md](docs/database.md). La Pi queda como histórico.
+6. ~~Adaptar el frontend para llamar a Supabase (`supabase-js` + RPC
+   `get_fires`) en vez del backend FastAPI local~~ ✅ — el backend FastAPI
+   queda como legacy, ver [docs/backend.md](docs/backend.md).
+7. ~~Arreglar timeout al consultar países grandes (España): índices
+   `iso2`/`initialdate`, coordenadas a 5 decimales, y función `get_years`
+   separada (barata, sin geometría) para poblar el selector de años sin
+   depender de la consulta pesada~~ ✅ — ver
+   [docs/database.md](docs/database.md) y
+   [`supabase/update_2026-07-17_years_perf.sql`](supabase/update_2026-07-17_years_perf.sql).
+8. ~~Tabla derivada `fire_zones`: agrupa incendios que se solapan/tocan a lo
+   largo de los años (vía `ST_ClusterDBSCAN`), con resumen precalculado
+   (nº de incendios, área total, primer/último año) y función RPC
+   `get_fire_zones`. Capa nueva en el visor ("Zonas de reincidencia"),
+   coloreada por nº de reincidencias~~ ✅ — ver
+   [docs/database.md](docs/database.md) y
+   [docs/frontend.md](docs/frontend.md).
+9. **Pendiente:** crear el repo remoto en GitHub, hacer push, y desplegar
+   el frontend (ya 100% estático) en GitHub Pages.
+10. (Futuro, no decidido aún) posibles mejoras: agregados por
+    comunidad/provincia, estadísticas de superficie quemada por año/región.
 
 ## Convenciones de trabajo con el usuario
 
