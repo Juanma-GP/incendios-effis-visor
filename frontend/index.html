@@ -74,6 +74,25 @@ const SUPABASE_URL = "https://qohghmezubkfckukbacz.supabase.co";
 const SUPABASE_KEY = "sb_publishable_Ooz9MTqPjHvJdPzJwX9_Jw_wpA2-FSQ";
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// La primera consulta tras un rato de inactividad puede tardar de más
+// (cold start del proyecto/pooler en el tier gratuito de Supabase) y dar
+// timeout aunque los reintentos siguientes vayan bien. Reintenta un par de
+// veces con espera antes de darlo por fallido de verdad.
+async function rpcWithRetry(fn, params, retries = 2, delayMs = 1500) {
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const { data, error } = await supabaseClient.rpc(fn, params);
+    if (!error) return data;
+    lastError = error;
+    if (attempt < retries) await sleep(delayMs);
+  }
+  throw lastError;
+}
+
 const COUNTRIES = [
   { code: "ES", label: "España" },
   { code: "PT", label: "Portugal" },
@@ -197,8 +216,7 @@ function selectedYears() {
 // único año: desde = hasta = último).
 async function refreshYearsSelect() {
   const countries = selectedCountries();
-  const { data, error } = await supabaseClient.rpc("get_years", { country_codes: countries });
-  if (error) throw error;
+  const data = await rpcWithRetry("get_years", { country_codes: countries });
   yearsAvailable = data || [];
   yearMin = yearsAvailable.length ? Math.min(...yearsAvailable) : 0;
   yearMax = yearsAvailable.length ? Math.max(...yearsAvailable) : 0;
@@ -310,11 +328,10 @@ async function ensureCountryYearsData(code, years) {
   const missingYears = years.filter((y) => !dataCache[`${code}:${y}`]);
   if (missingYears.length === 0) return;
 
-  const { data, error } = await supabaseClient.rpc("get_fires", {
+  const data = await rpcWithRetry("get_fires", {
     country_codes: [code],
     filter_years: missingYears,
   });
-  if (error) throw error;
 
   missingYears.forEach((y) => (dataCache[`${code}:${y}`] = []));
   data.features.forEach((feature) => {
@@ -325,8 +342,7 @@ async function ensureCountryYearsData(code, years) {
 
 async function ensureZonesData(code) {
   if (zonesCache[code]) return;
-  const { data, error } = await supabaseClient.rpc("get_fire_zones", { country_codes: [code] });
-  if (error) throw error;
+  const data = await rpcWithRetry("get_fire_zones", { country_codes: [code] });
   zonesCache[code] = data.features;
 }
 

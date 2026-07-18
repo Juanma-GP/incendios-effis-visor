@@ -10,6 +10,13 @@ frontend.
 la antigua `anon key`) están hardcodeadas en el HTML — es seguro porque son
 públicas por diseño y la tabla tiene RLS con política de solo lectura.
 
+Todas las llamadas RPC pasan por `rpcWithRetry(fn, params)` (2 reintentos,
+1.5s de espera entre cada uno) en vez de llamar a `supabaseClient.rpc`
+directo — la primera consulta tras un rato de inactividad puede tardar de
+más (cold start del proyecto/pooler en el tier gratuito de Supabase) y dar
+timeout aunque los reintentos siguientes vayan bien; con esto no hace falta
+que el usuario recargue la página a mano.
+
 ## Mapa base
 
 CartoDB Voyager (raster, sin API key) — muestra fronteras administrativas
