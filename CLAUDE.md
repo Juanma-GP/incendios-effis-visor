@@ -52,7 +52,13 @@ acumulación de superficie arrasada a lo largo del tiempo.
 10. ~~Subir `statement_timeout` en Supabase y añadir reintentos en el
     frontend para el cold start del tier gratuito~~ ✅ — ver
     [docs/database.md](docs/database.md) y [docs/frontend.md](docs/frontend.md).
-11. (Futuro, no decidido aún) posibles mejoras: agregados por
+11. (Futuro, no decidido aún) capa de plantas solares desde OpenStreetMap
+    (`power=plant` + `plant:source=solar`, vía Overpass API) para comprobar
+    visualmente si hay coincidencia espacial con zonas quemadas. OSM no trae
+    fecha de instalación fiable, así que de momento es solo coincidencia
+    espacial, no secuencia temporal. Cruzarlo con RAIPRE (registro oficial
+    de instalaciones, con fecha de alta) queda aparcado para más adelante.
+12. (Futuro, no decidido aún) otras posibles mejoras: agregados por
     comunidad/provincia, estadísticas de superficie quemada por año/región.
 
 ## Convenciones de trabajo con el usuario
