@@ -189,3 +189,30 @@ superficie ha ardido en total en este mismo sitio a lo largo del tiempo?".
   esas columnas resumen (no el `history` completo, para no engordar la
   respuesta). Consumida desde el frontend en la capa "Zonas de
   reincidencia" — ver [frontend.md](frontend.md).
+
+## Tabla `solar_plants` (2026-07-26, prototipo)
+
+Plantas solares (`power=plant` + `plant:source=solar`) desde OpenStreetMap
+vía Overpass API, para comprobar si hay coincidencia espacial con zonas
+quemadas (ver roadmap punto 11 en `CLAUDE.md`).
+
+- Solo guarda el **centro** de cada instalación (`geometry(Point, 4326)`),
+  no el polígono completo: de las ~4.500 instalaciones en el bbox
+  España/Portugal, buena parte son relaciones OSM (multipolígonos con
+  anillos internos/externos) cuya reconstrucción exacta no aportaba nada
+  para este prototipo.
+- `start_date` en OSM es texto libre y sin formato fijo (`"2009"`,
+  `"2009-03"`, `"9/2009"`...), y solo lo trae ~13% de las instalaciones. Se
+  guarda tal cual en `start_date_raw`, más el año extraído por regex (si se
+  puede) en `start_year`.
+- Carga con `scripts/load_osm_solar.py` (Overpass API, sin dependencias
+  nuevas — usa `urllib` en vez de `requests`). Idempotente: `ON CONFLICT
+  (osm_type, osm_id) DO UPDATE`, se puede re-ejecutar para traer cambios de
+  OSM.
+- Esquema y RLS en
+  [`supabase/update_2026-07-26_solar_plants.sql`](../supabase/update_2026-07-26_solar_plants.sql),
+  función RPC `get_solar_plants()` (sin filtro por país — el dataset no
+  está tageado por país) en
+  [`supabase/update_2026-07-26b_solar_plants_rpc.sql`](../supabase/update_2026-07-26b_solar_plants_rpc.sql).
+  Consumida desde el frontend en la capa "Plantas solares (OSM)" — ver
+  [frontend.md](frontend.md).

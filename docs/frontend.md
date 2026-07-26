@@ -124,6 +124,26 @@ incendios de todo el histórico — filtrar por año no aplicaría a esa vista.
   doble conteo en [database.md](database.md)), y rango de años
   (`first_year`-`last_year`).
 
+## Capa de plantas solares (2026-07-26, prototipo)
+
+Checkbox "Plantas solares (OSM)" — a diferencia de "Zonas de reincidencia",
+es un **overlay independiente**, no un modo exclusivo: se puede dejar
+activo a la vez que se ven incendios o zonas, para comparar visualmente si
+coinciden en el espacio (ver roadmap punto 11 en `CLAUDE.md` — motivación:
+comprobar si los incendios "favorecen" la instalación de solares).
+
+- `solarPlantsCache`: una sola consulta a `get_solar_plants()` (sin
+  parámetros — el dataset no está filtrado por país, viene de un bbox fijo
+  España/Portugal cargado por `scripts/load_osm_solar.py`), cacheada tras la
+  primera vez que se marca el checkbox.
+- Capa de círculos (`circle`, no `fill`) porque `solar_plants` solo guarda
+  el centro de cada instalación, no el polígono — ver
+  [database.md](database.md).
+- Popup al click: nombre, operador, tipo (fotovoltaica/termosolar),
+  potencia y fecha de puesta en marcha — estos tres últimos campos vienen
+  de OSM como texto libre y pueden faltar (~13% de las instalaciones traen
+  fecha).
+
 ## Panel de controles
 
 El panel (`#panel`) está en alpha 0.04 (casi invisible) por defecto, para no
