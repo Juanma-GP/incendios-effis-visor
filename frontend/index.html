@@ -44,7 +44,11 @@
   .year-handle:active { cursor: grabbing; }
   #year-range-labels { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: #222; }
 
-  #zones-toggle-label, #solar-toggle-label { display: flex; align-items: center; gap: 6px; margin-top: 12px; cursor: pointer; }
+  #zones-toggle-label, #solar-toggle-label, #solar-near-fires-toggle-label {
+    display: flex; align-items: center; gap: 6px; margin-top: 12px; cursor: pointer;
+  }
+  #solar-near-fires-toggle-label { font-size: 12px; }
+  #solar-near-fires-toggle-label:has(input:disabled) { cursor: default; opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -60,6 +64,10 @@
   <label id="solar-toggle-label">
     <input type="checkbox" id="solar-toggle" />
     Plantas solares (OSM)
+  </label>
+  <label id="solar-near-fires-toggle-label" style="margin-top: 4px; margin-left: 18px;">
+    <input type="checkbox" id="solar-near-fires-toggle" disabled />
+    Solo cerca de zonas quemadas (200m)
   </label>
   <div id="years-section">
     <h3>Años</h3>
@@ -400,13 +408,16 @@ function updateZonesPaint() {
   ]);
 }
 
-// Caché de plantas solares: una sola consulta, sin filtro por país (el
-// dataset de OSM no está tageado por país, viene de un bbox fijo ES/PT).
-let solarPlantsCache = null;
+// Caché de plantas solares, separada por "todas" vs "solo cerca de zonas
+// quemadas" (son dos consultas RPC distintas, no un filtro client-side).
+const solarPlantsCache = {};
 
-async function ensureSolarPlantsData() {
-  if (solarPlantsCache) return;
-  solarPlantsCache = await rpcWithRetry("get_solar_plants", {});
+async function ensureSolarPlantsData(nearFiresOnly) {
+  const key = nearFiresOnly ? "near" : "all";
+  if (solarPlantsCache[key]) return solarPlantsCache[key];
+  const params = nearFiresOnly ? { near_fires_only: true, radius_m: 200 } : {};
+  solarPlantsCache[key] = await rpcWithRetry("get_solar_plants", params);
+  return solarPlantsCache[key];
 }
 
 function ensureSolarLayer() {
@@ -443,6 +454,8 @@ function ensureSolarLayer() {
 
 async function toggleSolarLayer() {
   const show = document.getElementById("solar-toggle").checked;
+  const nearFiresToggle = document.getElementById("solar-near-fires-toggle");
+  nearFiresToggle.disabled = !show;
   if (!show) {
     if (map.getLayer("solar-plants")) {
       map.setLayoutProperty("solar-plants", "visibility", "none");
@@ -450,9 +463,9 @@ async function toggleSolarLayer() {
     return;
   }
   try {
-    await ensureSolarPlantsData();
+    const data = await ensureSolarPlantsData(nearFiresToggle.checked);
     ensureSolarLayer();
-    map.getSource("solar").setData(solarPlantsCache);
+    map.getSource("solar").setData(data);
     map.setLayoutProperty("solar-plants", "visibility", "visible");
   } catch (err) {
     console.error(err);
@@ -549,6 +562,9 @@ renderCountrySelect();
 document.getElementById("zones-toggle").addEventListener("change", updateZonesToggleUI);
 updateZonesToggleUI();
 document.getElementById("solar-toggle").addEventListener("change", () => {
+  toggleSolarLayer();
+});
+document.getElementById("solar-near-fires-toggle").addEventListener("change", () => {
   toggleSolarLayer();
 });
 document.getElementById("countries-select").addEventListener("change", () => {

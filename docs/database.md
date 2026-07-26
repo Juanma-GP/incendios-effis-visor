@@ -216,3 +216,14 @@ quemadas (ver roadmap punto 11 en `CLAUDE.md`).
   [`supabase/update_2026-07-26b_solar_plants_rpc.sql`](../supabase/update_2026-07-26b_solar_plants_rpc.sql).
   Consumida desde el frontend en la capa "Plantas solares (OSM)" — ver
   [frontend.md](frontend.md).
+- `get_solar_plants(near_fires_only boolean DEFAULT false, radius_m numeric
+  DEFAULT 200)`: con `near_fires_only = true` solo devuelve plantas cuyo
+  centro cae dentro de una `fire_zone` o a menos de `radius_m` metros de su
+  borde (`ST_DWithin` sobre `::geography`, no sobre grados). Se compara
+  contra `fire_zones` (unión de todo el histórico por sitio) y no contra
+  `incendios` directamente porque es la tabla ya pensada para "¿ha ardido
+  esto alguna vez?". Cambia la firma de la función respecto a la versión
+  anterior, por eso el update hace `DROP FUNCTION IF EXISTS
+  get_solar_plants();` antes de recrearla — si no, Postgres deja las dos
+  versiones y una llamada sin argumentos queda ambigua. Ver
+  [`supabase/update_2026-07-26c_solar_plants_near_fires.sql`](../supabase/update_2026-07-26c_solar_plants_near_fires.sql).

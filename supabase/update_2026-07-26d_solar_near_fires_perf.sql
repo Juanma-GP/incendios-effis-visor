@@ -1,0 +1,11 @@
+-- Ejecutar en el SQL Editor de Supabase (después de
+-- update_2026-07-26c_solar_plants_near_fires.sql, que ya creaste).
+--
+-- get_solar_plants(near_fires_only := true) daba timeout: ST_DWithin
+-- compara en geography (para que radius_m sean metros de verdad, no
+-- grados), pero el índice GIST de fire_zones.geom es sobre geometry, así
+-- que ese cast no podía usarlo y acababa en un escaneo mucho más caro de
+-- lo necesario. Se añade un índice sobre la expresión geom::geography,
+-- que es exactamente el cast que usa la función, para que el planificador
+-- pueda usarlo.
+CREATE INDEX IF NOT EXISTS fire_zones_geog_idx ON fire_zones USING GIST ((geom::geography));

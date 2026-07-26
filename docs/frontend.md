@@ -132,10 +132,15 @@ activo a la vez que se ven incendios o zonas, para comparar visualmente si
 coinciden en el espacio (ver roadmap punto 11 en `CLAUDE.md` — motivación:
 comprobar si los incendios "favorecen" la instalación de solares).
 
-- `solarPlantsCache`: una sola consulta a `get_solar_plants()` (sin
-  parámetros — el dataset no está filtrado por país, viene de un bbox fijo
-  España/Portugal cargado por `scripts/load_osm_solar.py`), cacheada tras la
-  primera vez que se marca el checkbox.
+- Checkbox anidado "Solo cerca de zonas quemadas (200m)" (deshabilitado
+  hasta marcar el de arriba): filtra a plantas cuyo centro cae dentro de
+  una `fire_zone` o a menos de 200m de su borde (`ST_DWithin` sobre
+  geography, ver `get_solar_plants(near_fires_only, radius_m)` en
+  [database.md](database.md)). Es la vía para responder a la pregunta que
+  motivó todo esto: ¿coinciden espacialmente incendios y solares?
+- `solarPlantsCache`: objeto con dos entradas (`all` / `near`), una por cada
+  combinación de parámetros de `get_solar_plants()` — son dos RPC distintas,
+  no un filtro en el cliente. Cada una se cachea la primera vez que se pide.
 - Capa de círculos (`circle`, no `fill`) porque `solar_plants` solo guarda
   el centro de cada instalación, no el polígono — ver
   [database.md](database.md).
