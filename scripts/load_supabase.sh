@@ -31,6 +31,7 @@ if [ ${#json_files[@]} -eq 0 ]; then
   exit 1
 fi
 
+any_loaded=0
 for f in "${json_files[@]}"; do
   echo "=== $f ==="
   if ./.venv/bin/python load_incendios.py "$f" \
@@ -40,7 +41,20 @@ for f in "${json_files[@]}"; do
     --user "$SUPABASE_USER" \
     --password "$TARGET_PASSWORD"; then
     echo "  -> cargado en Supabase"
+    any_loaded=1
   else
     echo "  -> omitido (no tiene forma de exportación EFFIS o falló la carga)"
   fi
 done
+
+# rebuild_fire_zones() es pesada (recorre toda la tabla incendios), por eso
+# se llama una sola vez aquí al final, no por cada fichero ni por trigger.
+if [ "$any_loaded" -eq 1 ]; then
+  echo "=== Recalculando fire_zones ==="
+  ./.venv/bin/python scripts/rebuild_fire_zones.py \
+    --host "$SUPABASE_HOST" \
+    --port "$SUPABASE_PORT" \
+    --dbname "$SUPABASE_DB" \
+    --user "$SUPABASE_USER" \
+    --password "$TARGET_PASSWORD"
+fi

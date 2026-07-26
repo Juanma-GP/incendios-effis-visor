@@ -131,13 +131,20 @@ no con más ajustes en la base de datos.
   - Cuidado con los campos de fecha: `initialdate`/`finaldate` a veces
     incluyen fracción de segundos (`.317`) — se detecta antes de aplicar el
     formato correcto a `strptime`.
-  - Usa `ON CONFLICT (id) DO NOTHING`, así que cargar el mismo fichero dos
-    veces (o ficheros con rangos de fechas solapados) no duplica filas.
+  - Usa `ON CONFLICT (id) DO UPDATE` (no `DO NOTHING`): un incendio activo
+    puede reaparecer en una extracción posterior con más área/fecha final,
+    y queremos quedarnos con esa versión más reciente. El `UPDATE` está
+    condicionado a `EXCLUDED.finaldate > incendios.finaldate` (o que la fila
+    existente no tenga `finaldate` todavía), para no pisar datos buenos si
+    algún día se recarga por error un fichero más antiguo.
 - `load_incendios.py` se puede seguir usando suelto contra cualquier host
   (por ejemplo, para volver a cargar en la Pi si hiciera falta):
   ```bash
   ./.venv/bin/python load_incendios.py <fichero>.json --host <host> --user <user> --password <pass>
   ```
+- Al final de `load_supabase.sh`, si se cargó algún fichero, se llama una
+  sola vez a `scripts/rebuild_fire_zones.py` (ver más abajo) — ya no hace
+  falta acordarse de correr `SELECT rebuild_fire_zones();` a mano.
 
 ## Tabla derivada `fire_zones` (2026-07-18)
 
@@ -165,10 +172,13 @@ superficie ha ardido en total en este mismo sitio a lo largo del tiempo?".
   no es la superficie física distinta que ha ardido alguna vez (para eso
   habría que usar `ST_Area(geom::geography)` sobre la geometría ya unida de
   la zona).
-- **No se recalcula sola**: hay que llamar a `SELECT rebuild_fire_zones();`
-  a mano tras cargar datos nuevos con `scripts/load_supabase.sh` — es una
-  operación pesada sobre toda la tabla, no algo para disparar por trigger en
-  cada insert. Ver
+- **No se recalcula sola con un trigger**: es una operación pesada
+  (`TRUNCATE` + `ST_ClusterDBSCAN`) sobre toda la tabla `incendios`, así que
+  no tiene sentido dispararla en cada insert (o incluso por lote, dado que
+  `load_incendios.py` inserta de 500 en 500). En vez de eso,
+  `scripts/load_supabase.sh` llama una sola vez a
+  `scripts/rebuild_fire_zones.py` al terminar de cargar todos los ficheros.
+  Ver
   [`supabase/update_2026-07-18_fire_zones.sql`](../supabase/update_2026-07-18_fire_zones.sql).
 - Columnas resumen precalculadas (`num_fires`, `total_area_ha`,
   `first_year`, `last_year`) — igual que con `geom_simplified`, se calculan

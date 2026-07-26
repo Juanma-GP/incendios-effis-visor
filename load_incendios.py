@@ -42,10 +42,20 @@ def looks_like_effis_geojson(data):
         return False
     return True
 
+_UPDATE_COLUMNS = [col for col in PROPERTY_COLUMNS if col != "id"]
+
+# DO UPDATE en vez de DO NOTHING: un incendio activo puede reaparecer en una
+# extracción posterior con más área/fecha final. Solo se actualiza si la fila
+# entrante es más reciente (finaldate mayor, o la existente sin finaldate
+# todavía) para no pisar datos buenos con una recarga accidental de un
+# fichero más antiguo.
 INSERT_SQL = f"""
     INSERT INTO incendios ({", ".join(PROPERTY_COLUMNS)}, geom)
     VALUES %s
-    ON CONFLICT (id) DO NOTHING
+    ON CONFLICT (id) DO UPDATE SET
+        {", ".join(f"{col} = EXCLUDED.{col}" for col in _UPDATE_COLUMNS)},
+        geom = EXCLUDED.geom
+    WHERE EXCLUDED.finaldate > incendios.finaldate OR incendios.finaldate IS NULL
 """
 
 VALUE_TEMPLATE = (
