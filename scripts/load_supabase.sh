@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Carga cualquier .json de la raíz del proyecto que tenga forma de
-# exportación EFFIS (lo valida load_incendios.py por contenido, no por
-# nombre de fichero) directamente en Supabase. Este es el canal oficial
+# Descomprime cualquier .zip de la raíz del proyecto (tal cual llega por
+# email de EFFIS), carga en Supabase cualquier .json resultante que tenga
+# forma de exportación EFFIS (lo valida load_incendios.py por contenido, no
+# por nombre de fichero), y al terminar borra el/los .zip y los .json ya
+# cargados — son datos descargables de nuevo desde EFFIS (por eso están en
+# .gitignore), no hace falta conservarlos en local. No se toca ningún otro
+# fichero (p.ej. los .readme.txt sí se conservan). Este es el canal oficial
 # para nuevas descargas desde 2026-07-16: la Raspberry Pi ya no es el
 # destino de las cargas nuevas, solo queda como copia histórica.
 #
@@ -25,6 +29,12 @@ SUPABASE_DB="postgres"
 SUPABASE_USER="postgres.qohghmezubkfckukbacz"
 
 shopt -s nullglob
+zip_files=(*.zip)
+for z in "${zip_files[@]}"; do
+  echo "=== Descomprimiendo $z ==="
+  unzip -o -q "$z"
+done
+
 json_files=(*.json)
 if [ ${#json_files[@]} -eq 0 ]; then
   echo "No hay ficheros .json en la raíz del proyecto." >&2
@@ -58,3 +68,7 @@ if [ "$any_loaded" -eq 1 ]; then
     --user "$SUPABASE_USER" \
     --password "$TARGET_PASSWORD"
 fi
+
+# Limpieza: solo los ficheros de datos ya procesados (json + zip), nada más.
+echo "=== Limpiando ficheros de datos ==="
+rm -f "${json_files[@]}" "${zip_files[@]}"

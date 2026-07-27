@@ -16,11 +16,13 @@
     ficheros de datos no se versionan en git (pesados, están en
     `.gitignore`) — se pueden volver a descargar de EFFIS o recuperar de
     Supabase, que es la copia canónica (ver [database.md](database.md)).
-  - Actualizaciones futuras: descargar la nueva extracción a la raíz del
-    proyecto y correr `./scripts/load_supabase.sh` (detecta el fichero por
-    su contenido, no por el nombre — ver [database.md](database.md)).
-    Recuerda además `SELECT rebuild_fire_zones();` si quieres que la tabla
-    `fire_zones` refleje los incendios nuevos.
+  - Actualizaciones futuras: dejar el `.zip` tal cual llega por email de
+    EFFIS en la raíz del proyecto y correr `./scripts/load_supabase.sh` —
+    lo descomprime, carga lo que tenga forma de exportación EFFIS (detecta
+    el fichero por su contenido, no por el nombre — ver
+    [database.md](database.md)), recalcula `fire_zones` sola, y al terminar
+    borra el `.zip` y el `.json` ya cargados (no hace falta descomprimir a
+    mano ni acordarse de limpiar después).
 - **Limitación conocida del dataset** (documentada en el `readme.txt` de
   EFFIS): el producto MODIS Rapid Damage Assessment solo mapea incendios de
   ~30 hectáreas o más (resolución de satélite 250m). Representa

@@ -39,6 +39,12 @@ EFFIS ya no van ahí** — van directas a Supabase con `scripts/load_supabase.sh
   `ST_AsGeoJSON(geom_simplified, 5)` — 5 decimales (~1m) sobre la columna
   **simplificada**, no la geometría original (ver más abajo, columna
   `geom_simplified`).
+- Las features vienen **ordenadas por `area_ha` descendente**
+  (`json_agg(feature ORDER BY area_ha DESC)`), no sin orden. MapLibre pinta
+  una capa `fill` en el orden de llegada de la fuente GeoJSON: sin esto, un
+  incendio pequeño solapado por uno grande podía quedar tapado si el grande
+  llegaba después en la respuesta. Ver
+  [`supabase/update_2026-07-27_fires_order_by_area.sql`](../supabase/update_2026-07-27_fires_order_by_area.sql).
 - Función RPC `get_years(country_codes text[])`: devuelve solo los años
   distintos disponibles para los países dados, **sin geometría** — se usa
   para poblar el selector de años del frontend sin tener que descargar antes
@@ -117,13 +123,17 @@ no con más ajustes en la base de datos.
 ./scripts/load_supabase.sh
 ```
 
-- Recorre **todos** los `.json` en la raíz del proyecto — no depende del
-  nombre de fichero. `load_incendios.py` valida el *contenido* antes de
-  intentar cargarlo (`looks_like_effis_geojson`): comprueba que sea una
-  `FeatureCollection` en CRS EPSG:3035, con features `MultiPolygon` y las
-  propiedades mínimas esperadas (`id`, `initialdate`, `finaldate`, `iso2`,
-  `country`). Si un fichero no encaja, se omite con un aviso en vez de
-  abortar toda la carga.
+- Primero descomprime **todos** los `.zip` que haya en la raíz del proyecto
+  (tal cual llegan por email de EFFIS), y luego recorre **todos** los
+  `.json` — no depende del nombre de fichero. `load_incendios.py` valida el
+  *contenido* antes de intentar cargarlo (`looks_like_effis_geojson`):
+  comprueba que sea una `FeatureCollection` en CRS EPSG:3035, con features
+  `MultiPolygon` y las propiedades mínimas esperadas (`id`, `initialdate`,
+  `finaldate`, `iso2`, `country`). Si un fichero no encaja, se omite con un
+  aviso en vez de abortar toda la carga.
+- Al terminar, borra los `.zip` y los `.json` que ha procesado (no el resto
+  de ficheros de la raíz) — son datos descargables de nuevo desde EFFIS, no
+  hace falta conservarlos en local, y ya estaban en `.gitignore`.
 - Internamente sigue usando `load_incendios.py`:
   - Reconstruye la geometría manualmente a WKT, sin `shapely` ni GDAL.
   - Reproyecta en la propia consulta SQL con
