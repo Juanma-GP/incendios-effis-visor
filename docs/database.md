@@ -131,9 +131,11 @@ no con más ajustes en la base de datos.
   `MultiPolygon` y las propiedades mínimas esperadas (`id`, `initialdate`,
   `finaldate`, `iso2`, `country`). Si un fichero no encaja, se omite con un
   aviso en vez de abortar toda la carga.
-- Al terminar, borra los `.zip` y los `.json` que ha procesado (no el resto
-  de ficheros de la raíz) — son datos descargables de nuevo desde EFFIS, no
-  hace falta conservarlos en local, y ya estaban en `.gitignore`.
+- Al terminar, borra los `.zip` y **todo** lo que traían dentro (`.json`,
+  `.readme.txt`, cualquier otro fichero — se captura la lista de contenido
+  de cada zip con `unzip -Z1` antes de descomprimir, para poder borrarlo
+  todo después) — no el resto de ficheros de la raíz. Son datos
+  descargables de nuevo desde EFFIS, no hace falta conservar nada en local.
 - Internamente sigue usando `load_incendios.py`:
   - Reconstruye la geometría manualmente a WKT, sin `shapely` ni GDAL.
   - Reproyecta en la propia consulta SQL con

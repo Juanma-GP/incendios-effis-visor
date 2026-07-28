@@ -2,12 +2,13 @@
 # Descomprime cualquier .zip de la raíz del proyecto (tal cual llega por
 # email de EFFIS), carga en Supabase cualquier .json resultante que tenga
 # forma de exportación EFFIS (lo valida load_incendios.py por contenido, no
-# por nombre de fichero), y al terminar borra el/los .zip y los .json ya
-# cargados — son datos descargables de nuevo desde EFFIS (por eso están en
-# .gitignore), no hace falta conservarlos en local. No se toca ningún otro
-# fichero (p.ej. los .readme.txt sí se conservan). Este es el canal oficial
-# para nuevas descargas desde 2026-07-16: la Raspberry Pi ya no es el
-# destino de las cargas nuevas, solo queda como copia histórica.
+# por nombre de fichero), y al terminar borra el zip y TODO su contenido
+# descomprimido (json, readme.txt, cualquier otra cosa que trajera el zip)
+# — son datos descargables de nuevo desde EFFIS (por eso el .zip y el .json
+# están en .gitignore), no hace falta conservar nada en local. No se toca
+# ningún otro fichero de la raíz. Este es el canal oficial para nuevas
+# descargas desde 2026-07-16: la Raspberry Pi ya no es el destino de las
+# cargas nuevas, solo queda como copia histórica.
 #
 # La contraseña de Supabase se lee de .ñ.txt, nunca se escribe aquí.
 #
@@ -30,8 +31,12 @@ SUPABASE_USER="postgres.qohghmezubkfckukbacz"
 
 shopt -s nullglob
 zip_files=(*.zip)
+extracted_files=()
 for z in "${zip_files[@]}"; do
   echo "=== Descomprimiendo $z ==="
+  while IFS= read -r entry; do
+    extracted_files+=("$entry")
+  done < <(unzip -Z1 "$z")
   unzip -o -q "$z"
 done
 
@@ -69,6 +74,7 @@ if [ "$any_loaded" -eq 1 ]; then
     --password "$TARGET_PASSWORD"
 fi
 
-# Limpieza: solo los ficheros de datos ya procesados (json + zip), nada más.
+# Limpieza: el/los .zip y absolutamente todo lo que traían dentro
+# (json, readme.txt, lo que sea), nada se conserva.
 echo "=== Limpiando ficheros de datos ==="
-rm -f "${json_files[@]}" "${zip_files[@]}"
+rm -f "${json_files[@]}" "${zip_files[@]}" "${extracted_files[@]}"

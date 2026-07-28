@@ -21,8 +21,10 @@
     lo descomprime, carga lo que tenga forma de exportación EFFIS (detecta
     el fichero por su contenido, no por el nombre — ver
     [database.md](database.md)), recalcula `fire_zones` sola, y al terminar
-    borra el `.zip` y el `.json` ya cargados (no hace falta descomprimir a
-    mano ni acordarse de limpiar después).
+    borra el `.zip` y absolutamente todo lo que traía dentro (`.json`,
+    `.readme.txt`, cualquier otra cosa) — no se conserva nada en local, se
+    puede volver a descargar de EFFIS o recuperar de Supabase, que es la
+    copia canónica.
 - **Limitación conocida del dataset** (documentada en el `readme.txt` de
   EFFIS): el producto MODIS Rapid Damage Assessment solo mapea incendios de
   ~30 hectáreas o más (resolución de satélite 250m). Representa
