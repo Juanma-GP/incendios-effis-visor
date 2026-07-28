@@ -265,7 +265,20 @@ const TERRAIN_STYLE = {
         '<a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
     },
   },
-  layers: [{ id: "terrain-base", type: "raster", source: "opentopomap" }],
+  layers: [{
+    id: "terrain-base",
+    type: "raster",
+    source: "opentopomap",
+    // OpenTopoMap por defecto es muy saturado (verdes/naranjas intensos) y
+    // compite visualmente con los incendios superpuestos. Se apaga con
+    // paint properties nativas de MapLibre (no un filtro CSS, que afectaría
+    // también a las capas de incendios/zonas/solares por encima).
+    paint: {
+      "raster-saturation": -0.6,
+      "raster-contrast": -0.2,
+      "raster-brightness-max": 0.8,
+    },
+  }],
 };
 
 const map = new maplibregl.Map({

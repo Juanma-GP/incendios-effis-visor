@@ -27,6 +27,13 @@ OpenTopoMap diera problemas de disponibilidad (pide uso moderado, ver
 volver a `https://{a,b,c,d}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png`
 es la alternativa de vuelta.
 
+OpenTopoMap por defecto es bastante saturado (verdes/naranjas intensos) y
+competía visualmente con los incendios superpuestos, así que la capa
+`terrain-base` lleva `paint` con `raster-saturation`/`raster-contrast`/
+`raster-brightness-max` para apagarlo — deliberadamente con paint
+properties nativas de MapLibre, no un filtro CSS sobre `#map`, para no
+afectar también a las capas de incendios/zonas/solares que van por encima.
+
 ## Controles
 
 - **Países**: combobox multi-selección (`<select multiple>`), ES/PT
