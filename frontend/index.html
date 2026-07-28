@@ -242,28 +242,35 @@ function colorsByRecency(years) {
   return result;
 }
 
-const CARTO_STYLE = {
+// Capa de relieve (OpenTopoMap) en vez del mapa "clásico" — mismo dato base
+// (OSM), pero con sombreado de relieve y curvas de nivel. Gratuita, sin API
+// key, pero su servidor público pide uso moderado (ver
+// https://opentopomap.org/about#verwendung), así que si algún día da
+// problemas de disponibilidad, CARTO Voyager es la alternativa de vuelta.
+const TERRAIN_STYLE = {
   version: 8,
   sources: {
-    carto: {
+    "opentopomap": {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+        "https://a.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://b.tile.opentopomap.org/{z}/{x}/{y}.png",
+        "https://c.tile.opentopomap.org/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
+      maxzoom: 17,
       attribution:
-        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+        '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
+        '<a href="https://opentopomap.org/credits">SRTM</a> — ' +
+        '<a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
     },
   },
-  layers: [{ id: "carto-base", type: "raster", source: "carto" }],
+  layers: [{ id: "terrain-base", type: "raster", source: "opentopomap" }],
 };
 
 const map = new maplibregl.Map({
   container: "map",
-  style: CARTO_STYLE,
+  style: TERRAIN_STYLE,
   center: [-6, 40], // entre España y Portugal
   zoom: 5,
 });

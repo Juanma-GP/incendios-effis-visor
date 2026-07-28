@@ -19,10 +19,13 @@ que el usuario recargue la página a mano.
 
 ## Mapa base
 
-CartoDB Voyager (raster, sin API key) — muestra fronteras administrativas
-(comunidades autónomas, comarcas) y topónimos con buen detalle. Alternativa
-más minimalista: cambiar la URL de `rastertiles/voyager` a `light_all`
-(Positron).
+OpenTopoMap (2026-07-28) — capa de relieve (raster, sin API key): sombreado
+de terreno y curvas de nivel a partir de SRTM, sobre datos OSM. Antes se
+usaba CartoDB Voyager (más plano, sin relieve); si el servidor público de
+OpenTopoMap diera problemas de disponibilidad (pide uso moderado, ver
+[opentopomap.org/about#verwendung](https://opentopomap.org/about#verwendung)),
+volver a `https://{a,b,c,d}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png`
+es la alternativa de vuelta.
 
 ## Controles
 
