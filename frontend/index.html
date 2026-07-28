@@ -49,35 +49,120 @@
   }
   #solar-near-fires-toggle-label { font-size: 12px; }
   #solar-near-fires-toggle-label:has(input:disabled) { cursor: default; opacity: 0.5; }
+
+  #panel-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  #panel-header-title { font-weight: 600; font-size: 14px; }
+  #panel-header-actions { display: flex; gap: 2px; flex-shrink: 0; }
+  #panel-header-actions button {
+    background: none; border: none; cursor: pointer; font-size: 15px;
+    padding: 2px 5px; border-radius: 4px; line-height: 1;
+  }
+  #panel-header-actions button:hover { background: rgba(0,0,0,0.08); }
+  #selectors.collapsed { display: none; }
+  #query-btn { margin-top: 10px; }
+
+  #info-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; align-items: center; justify-content: center; z-index: 10;
+    padding: 20px;
+  }
+  #info-overlay.hidden { display: none; }
+  #info-modal {
+    background: white; color: #222; width: 100%; max-width: 480px; max-height: 80vh;
+    overflow-y: auto; padding: 18px 22px; border-radius: 10px;
+    font-size: 13px; line-height: 1.5; position: relative;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  #info-modal h3 { margin-top: 0; }
+  #info-modal ul { padding-left: 18px; margin: 8px 0; }
+  #info-modal li { margin-bottom: 6px; }
+  #info-close-btn {
+    position: absolute; top: 10px; right: 10px; background: none; border: none;
+    font-size: 18px; cursor: pointer; line-height: 1; padding: 2px 6px; border-radius: 4px;
+  }
+  #info-close-btn:hover { background: rgba(0,0,0,0.08); }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="panel">
-  <h3>Países</h3>
-  <select id="countries-select" multiple size="4"></select>
-  <button id="query-btn">Consultar</button>
-  <label id="zones-toggle-label">
-    <input type="checkbox" id="zones-toggle" />
-    Zonas de reincidencia
-  </label>
-  <label id="solar-toggle-label">
-    <input type="checkbox" id="solar-toggle" />
-    Plantas solares (OSM)
-  </label>
-  <label id="solar-near-fires-toggle-label" style="margin-top: 4px; margin-left: 18px;">
-    <input type="checkbox" id="solar-near-fires-toggle" disabled />
-    Solo cerca de zonas quemadas (200m)
-  </label>
-  <div id="years-section">
-    <h3>Años</h3>
-    <div id="year-range-labels"><span id="year-from-label"></span><span id="year-to-label"></span></div>
-    <div id="year-range">
-      <div id="year-range-track"></div>
-      <div id="year-range-fill"></div>
-      <div class="year-handle" id="year-handle-from" tabindex="0"></div>
-      <div class="year-handle" id="year-handle-to" tabindex="0"></div>
+  <div id="panel-header">
+    <span id="panel-header-title">Incendios ES/PT</span>
+    <div id="panel-header-actions">
+      <button id="info-btn" title="Sobre los datos (EFFIS)" aria-label="Sobre los datos (EFFIS)">ℹ️</button>
+      <button id="collapse-btn" title="Mostrar/ocultar selectores" aria-label="Mostrar/ocultar selectores">▾</button>
     </div>
+  </div>
+  <div id="selectors">
+    <h3>Países</h3>
+    <select id="countries-select" multiple size="4"></select>
+    <label id="zones-toggle-label">
+      <input type="checkbox" id="zones-toggle" />
+      Zonas de reincidencia
+    </label>
+    <label id="solar-toggle-label">
+      <input type="checkbox" id="solar-toggle" />
+      Plantas solares (OSM)
+    </label>
+    <label id="solar-near-fires-toggle-label" style="margin-top: 4px; margin-left: 18px;">
+      <input type="checkbox" id="solar-near-fires-toggle" disabled />
+      Solo cerca de zonas quemadas (200m)
+    </label>
+    <div id="years-section">
+      <h3>Años</h3>
+      <div id="year-range-labels"><span id="year-from-label"></span><span id="year-to-label"></span></div>
+      <div id="year-range">
+        <div id="year-range-track"></div>
+        <div id="year-range-fill"></div>
+        <div class="year-handle" id="year-handle-from" tabindex="0"></div>
+        <div class="year-handle" id="year-handle-to" tabindex="0"></div>
+      </div>
+    </div>
+  </div>
+  <button id="query-btn">Consultar</button>
+</div>
+<div id="info-overlay" class="hidden">
+  <div id="info-modal">
+    <button id="info-close-btn" aria-label="Cerrar">✕</button>
+    <h3>Sobre los datos (EFFIS Burnt Area product)</h3>
+    <p><strong>IMPORTANT NOTE</strong> — For any use of the EFFIS Burnt Area
+      product the conditions listed below must be taken into
+      consideration:</p>
+    <ul>
+      <li>The product is derived from the daily processing of MODIS
+        satellite imagery at 250 m ground spatial resolution.</li>
+      <li>The perimeters of the burned scars represent areas burned by
+        fires as detected from MODIS satellite imagery. Therefore, no
+        distinction is made between wildland fires, environmental burnings
+        or prescribed fires.</li>
+      <li>Burnt scars of approximately 30 ha in size are mapped, although
+        the product may also include the perimeters of burned areas of
+        smaller dimension.</li>
+      <li>Small burnt or un-burnt areas below the spatial resolution of the
+        MODIS imagery are not mapped; these may include small unburned
+        islands inside the burnt area perimeter.</li>
+      <li>The Burnt Area product is updated up to two times every day. The
+        perimeter of burnt areas due to different fires happening between
+        two sequential updates may be merged into a single perimeter.</li>
+      <li>The dates reported as Start date and Last update may not
+        correspond to the date of ignition and extinction of the fire.</li>
+      <li>The EFFIS burnt area product is intended to provide estimates of
+        burnt areas at European level. Caution should be taken when
+        comparing this product to other data that may have been produced
+        using different methodologies and scopes.</li>
+      <li>Although the burnt area perimeters are overlayed on the Google
+        imagery, it must be noted that the original EFFIS product is
+        produced at 250 m spatial resolution, not at the resolution of the
+        underlying Google images.</li>
+    </ul>
+    <p>Although only a fraction of the total number of fires is mapped, the
+      area burned by fires of this size represents <strong>about 75% to
+      80%</strong> of the total area burned in the EU. Modeling historical
+      fire data from the EFFIS European fire database, equations have been
+      set up for the different countries, which allow predicting the total
+      area burned with good accuracy; that is, the total burnt area in a
+      country is obtained as a function of the area burned by fires larger
+      than 30 ha.</p>
   </div>
 </div>
 <script>
@@ -575,6 +660,23 @@ document.getElementById("countries-select").addEventListener("change", () => {
 });
 document.getElementById("query-btn").addEventListener("click", runQuery);
 setupYearRangeEvents();
+
+document.getElementById("info-btn").addEventListener("click", () => {
+  document.getElementById("info-overlay").classList.remove("hidden");
+});
+document.getElementById("info-close-btn").addEventListener("click", () => {
+  document.getElementById("info-overlay").classList.add("hidden");
+});
+document.getElementById("info-overlay").addEventListener("click", (e) => {
+  if (e.target.id === "info-overlay") e.target.classList.add("hidden");
+});
+
+document.getElementById("collapse-btn").addEventListener("click", () => {
+  const selectors = document.getElementById("selectors");
+  const collapseBtn = document.getElementById("collapse-btn");
+  selectors.classList.toggle("collapsed");
+  collapseBtn.textContent = selectors.classList.contains("collapsed") ? "▸" : "▾";
+});
 refreshYearsSelect().catch((err) => {
   console.error(err);
   alert(`Error consultando años disponibles: ${err.message || err}`);
